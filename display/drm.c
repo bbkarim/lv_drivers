@@ -718,10 +718,21 @@ void drm_flush(lv_disp_drv_t * disp_drv, const lv_area_t * area, lv_color_t * co
 	if(!disp_drv->direct_mode) {
 		/*Backwards compatibility: Non-direct flush */
 		uint32_t w = (area->x2 - area->x1) + 1;
-		for (int y = 0, i = area->y1; i <= area->y2 ; ++i, ++y) {
-			lv_memcpy(fbuf->map + (area->x1 * (LV_COLOR_SIZE / 8)) + (fbuf->pitch * i),
-			          (uint8_t *)color_p + (w * (LV_COLOR_SIZE / 8) * y),
-			          w * (LV_COLOR_SIZE / 8));
+		lv_coord_t x,y;
+		if(disp_drv->rotated) {
+			for (x = area->x2; x >= area->x1; --x) {
+				for (y = area->y1; y <= area->y2; y++) {
+					lv_color_t *rp = color_p + (y * drm_dev.height) + x;
+					lv_color_t *wp = (lv_color_t *)fbuf->map + ((drm_dev.height - x) * drm_dev.width) + y;
+					*wp = *rp;
+				}
+			}
+	  }
+		else {
+			for (x = 0, y = area->y1 ; y <= area->y2 ; ++x, ++y) {
+				memcpy((uint8_t *)fbuf->map + (area->x1 * (LV_COLOR_SIZE/8)) + (fbuf->pitch * y),
+							 (uint8_t *)color_p + (w * (LV_COLOR_SIZE/8) * x), w * (LV_COLOR_SIZE/8));
+			}
 		}
 	}
 
