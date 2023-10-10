@@ -2,6 +2,9 @@
  * @file smm.c
  *
  */
+
+#include "lv_drv_conf.h"
+
 #if USE_WAYLAND
 
 #include <stddef.h>
