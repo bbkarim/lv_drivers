@@ -715,7 +715,8 @@ void drm_flush(lv_disp_drv_t *disp_drv, const lv_area_t *area, lv_color_t *color
 	struct drm_buffer *fbuf = drm_dev.cur_bufs[1];
 	lv_coord_t w = (area->x2 - area->x1 + 1);
 	lv_coord_t h = (area->y2 - area->y1 + 1);
-	int i, y;
+	lv_color_t *rp, *wp;
+	int i, x, y;
 
 	dbg("x %d:%d y %d:%d w %d h %d", area->x1, area->x2, area->y1, area->y2, w, h);
 
@@ -723,10 +724,21 @@ void drm_flush(lv_disp_drv_t *disp_drv, const lv_area_t *area, lv_color_t *color
 	if ((w != drm_dev.width || h != drm_dev.height) && drm_dev.cur_bufs[0])
 		memcpy(fbuf->map, drm_dev.cur_bufs[0]->map, fbuf->size);
 
-	for (y = 0, i = area->y1 ; i <= area->y2 ; ++i, ++y) {
-                memcpy((uint8_t *)fbuf->map + (area->x1 * (LV_COLOR_SIZE/8)) + (fbuf->pitch * i),
-                       (uint8_t *)color_p + (w * (LV_COLOR_SIZE/8) * y),
-		       w * (LV_COLOR_SIZE/8));
+	if(disp_drv->rotated) {
+		for (x = area->x2; x >= area->x1; --x) {
+			for (y = area->y1; y <= area->y2; y++) {
+				rp = color_p + (y * drm_dev.height) + x;
+				wp = (lv_color_t *)fbuf->map + ((drm_dev.height - x) * drm_dev.width) + y;
+				*wp = *rp;
+			}
+		}
+	}
+	else {
+		for (y = 0, i = area->y1 ; i <= area->y2 ; ++i, ++y) {
+			memcpy((uint8_t *)fbuf->map + (area->x1 * (LV_COLOR_SIZE/8)) + (fbuf->pitch * i),
+				   (uint8_t *)color_p + (w * (LV_COLOR_SIZE/8) * y),
+		   w * (LV_COLOR_SIZE/8));
+		}
 	}
 
 	if (drm_dev.req)
