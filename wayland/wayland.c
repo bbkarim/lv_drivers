@@ -66,7 +66,7 @@
 enum object_type {
     OBJECT_TITLEBAR = 0,
     OBJECT_BUTTON_CLOSE,
-#if LV_WAYLAND_XDG_SHELL
+#if LV_WAYLAND_XDG_SHELL && LV_WAYLAND_XDG_SHELL_MIN_MAX_BUTTONS
     OBJECT_BUTTON_MAXIMIZE,
     OBJECT_BUTTON_MINIMIZE,
 #endif
@@ -548,7 +548,7 @@ static void pointer_handle_button(void *data, struct wl_pointer *wl_pointer,
             window->shall_close = true;
         }
         break;
-#if LV_WAYLAND_XDG_SHELL
+#if LV_WAYLAND_XDG_SHELL && LV_WAYLAND_XDG_SHELL_MIN_MAX_BUTTONS
     case OBJECT_BUTTON_MAXIMIZE:
         if ((button == BTN_LEFT) && (state == WL_POINTER_BUTTON_STATE_RELEASED))
         {
@@ -978,7 +978,7 @@ static void touch_handle_up(void *data, struct wl_touch *wl_touch,
     case OBJECT_BUTTON_CLOSE:
         window->shall_close = true;
         break;
-#if LV_WAYLAND_XDG_SHELL
+#if LV_WAYLAND_XDG_SHELL && LV_WAYLAND_XDG_SHELL_MIN_MAX_BUTTONS
     case OBJECT_BUTTON_MAXIMIZE:
         if (window->xdg_toplevel)
         {
@@ -1628,7 +1628,7 @@ static bool attach_decoration(struct window *window, struct graphic_object * dec
         pos_x = parent->width - 1 * (BUTTON_MARGIN + BUTTON_SIZE);
         pos_y = -1 * (BUTTON_MARGIN + BUTTON_SIZE + (BORDER_SIZE / 2));
         break;
-#if LV_WAYLAND_XDG_SHELL
+#if LV_WAYLAND_XDG_SHELL && LV_WAYLAND_XDG_SHELL_MIN_MAX_BUTTONS
     case OBJECT_BUTTON_MAXIMIZE:
         pos_x = parent->width - 2 * (BUTTON_MARGIN + BUTTON_SIZE);
         pos_y = -1 * (BUTTON_MARGIN + BUTTON_SIZE + (BORDER_SIZE / 2));
@@ -1703,7 +1703,7 @@ static bool create_decoration(struct window *window,
         decoration->width = BUTTON_SIZE;
         decoration->height = BUTTON_SIZE;
         break;
-#if LV_WAYLAND_XDG_SHELL
+#if LV_WAYLAND_XDG_SHELL && LV_WAYLAND_XDG_SHELL_MIN_MAX_BUTTONS
     case OBJECT_BUTTON_MAXIMIZE:
         decoration->width = BUTTON_SIZE;
         decoration->height = BUTTON_SIZE;
@@ -1781,7 +1781,7 @@ static bool create_decoration(struct window *window,
             }
         }
         break;
-#if LV_WAYLAND_XDG_SHELL
+#if LV_WAYLAND_XDG_SHELL && LV_WAYLAND_XDG_SHELL_MIN_MAX_BUTTONS
     case OBJECT_BUTTON_MAXIMIZE:
         lv_color_fill((lv_color_t *)buf_base,
                       lv_color_make(0xCC, 0xCC, 0xCC), (decoration->width * decoration->height));
