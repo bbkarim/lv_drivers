@@ -48,8 +48,16 @@
 #define TAG_BUFFER_DAMAGE (1)
 
 #if LV_WAYLAND_CLIENT_SIDE_DECORATIONS
+#ifndef LV_WAYLAND_TITLE_BAR_HEIGHT
 #define TITLE_BAR_HEIGHT 24
+#else
+#define TITLE_BAR_HEIGHT LV_WAYLAND_TITLE_BAR_HEIGHT
+#endif
+#ifndef LV_WAYLAND_BORDER_SIZE
 #define BORDER_SIZE 2
+#else
+#define BORDER_SIZE LV_WAYLAND_BORDER_SIZE
+#endif
 #define BUTTON_MARGIN LV_MAX((TITLE_BAR_HEIGHT / 6), BORDER_SIZE)
 #define BUTTON_PADDING LV_MAX((TITLE_BAR_HEIGHT / 8), BORDER_SIZE)
 #define BUTTON_SIZE (TITLE_BAR_HEIGHT - (2 * BUTTON_MARGIN))
@@ -2278,12 +2286,14 @@ static void _lv_wayland_handle_output(void)
     }
 }
 
+#ifndef LV_WAYLAND_TIMER_HANDLER
 static void _lv_wayland_cycle(lv_timer_t * tmr)
 {
     LV_UNUSED(tmr);
     _lv_wayland_handle_input();
     _lv_wayland_handle_output();
 }
+#endif
 
 static void _lv_wayland_pointer_read(lv_indev_drv_t *drv, lv_indev_data_t *data)
 {
@@ -2677,6 +2687,60 @@ void lv_wayland_window_set_fullscreen(lv_disp_t * disp, bool fullscreen)
         {
             LV_LOG_WARN("Wayland fullscreen mode not supported");
         }
+    }
+}
+
+/**
+ * Set/unset window maximized mode
+ * @param disp LVGL display using window to be set/unset fullscreen
+ * @param maximized requested status (true = maximized)
+ */
+void lv_wayland_window_set_maximized(lv_disp_t * disp, bool maximized)
+{
+    struct window *window = disp->driver->user_data;
+    if (!window || window->closed)
+    {
+        return;
+    }
+
+    if (0)
+    {
+        // Needed for #if madness below
+    }
+#if LV_WAYLAND_XDG_SHELL
+    else if (window->xdg_toplevel)
+    {
+        if (maximized)
+        {
+			xdg_toplevel_set_max_size(window->xdg_toplevel, WAYLAND_HOR_RES, WAYLAND_VER_RES + (LV_WAYLAND_TITLE_BAR_HEIGHT - (2 * LV_WAYLAND_BORDER_SIZE)));
+			xdg_toplevel_set_maximized(window->xdg_toplevel);
+        }
+        else
+        {
+			xdg_toplevel_unset_maximized(window->xdg_toplevel);
+        }
+        window->maximized = maximized;
+        window->flush_pending = true;
+    }
+#endif
+#if LV_WAYLAND_WL_SHELL
+    else if (window->wl_shell_surface)
+    {
+        if (maximized)
+        {
+			// TBD
+        }
+        else
+        {
+			// TBD
+        }
+        window->fullscreen = maximized;
+        window->flush_pending = true;
+    }
+#endif
+    else
+    {
+        LV_LOG_WARN("Wayland maximized mode not supported");
     }
 }
 
