@@ -29,6 +29,12 @@
 #include <wayland-cursor.h>
 #include <xkbcommon/xkbcommon.h>
 
+#if USE_WAYLAND_EGL
+#include <EGL/egl.h>
+#include <GLES2/gl2.h>
+#include "util.h"
+#endif
+
 #if !(LV_WAYLAND_XDG_SHELL || LV_WAYLAND_WL_SHELL)
 #error "Please select at least one shell integration for Wayland driver"
 #endif
@@ -247,6 +253,22 @@ struct window
     uint64_t frame_counter;
     bool frame_done;
 };
+
+#if USE_WAYLAND_EGL
+static struct wl_egl_window    *egl_window;    //  Wayland EGL Window
+static struct wl_region        *egl_region;    //  Wayland Region
+/// Wayland EGL Interfaces for OpenGL Rendering
+static EGLDisplay egl_display;  //  EGL Display
+static EGLConfig  egl_conf;     //  EGL Configuration
+static EGLSurface egl_surface;  //  EGL Surface
+static EGLContext egl_context;  //  EGL Context
+#endif
+
+#if USE_WAYLAND_EGL
+static struct wl_region *create_opaque_region(struct window *window);
+static void init_egl(lv_disp_t * disp);
+static struct wl_egl_window *create_egl_window(lv_disp_t * disp);
+#endif
 
 /*********************************
  *   STATIC VARIABLES and FUNTIONS
@@ -2437,6 +2459,10 @@ void lv_wayland_init(void)
         return;
     }
 #endif
+
+#if USE_WAYLAND_EGL
+    init_egl(application.display);
+#endif
 }
 
 /**
@@ -2591,6 +2617,14 @@ lv_disp_t * lv_wayland_create_window(lv_coord_t hor_res, lv_coord_t ver_res, cha
     {
         LV_LOG_ERROR("failed to register keyboard indev");
     }
+
+#if USE_WAYLAND_EGL
+    if(create_egl_window(window->lv_disp) == NULL)
+    {
+        LV_LOG_ERROR("failed to create wayland egl window");
+        return NULL;
+    }
+#endif
 
     return window->lv_disp;
 }
@@ -2891,4 +2925,182 @@ uint32_t lv_wayland_timer_handler(void)
     return time_till_next;
 }
 #endif
+
+#if USE_WAYLAND_EGL
+//  Create the Wayland Region for rendering OpenGL graphics
+static struct wl_region *create_opaque_region(struct window *window) {
+	LV_LOG_USER("Creating opaque region for windows %p...", window);
+
+    if (!window || window->closed)
+    {
+    	LV_LOG_ERROR("Window is closed !!");
+        return NULL;
+    }
+
+#if LV_WAYLAND_XDG_SHELL
+    struct xdg_surface *surface = window->xdg_surface;
+#endif
+#if LV_WAYLAND_WL_SHELL
+    struct wl_shell_surface *surface = window->wl_shell_surface;
+#endif
+
+	LV_LOG_USER("Using surface %p...", surface);
+
+    //  Create a Wayland Region
+    egl_region = wl_compositor_create_region(window->application->compositor);
+    LV_ASSERT_MSG((egl_region != NULL), "Failed to create EGL Region");
+
+    //  Set the dimensions of the Wayland Region
+    wl_region_add(egl_region, 0, 0, WAYLAND_HOR_RES, WAYLAND_VER_RES);
+
+    //  Add the Region to the Wayland Surface
+    wl_surface_set_opaque_region(surface, egl_region);
+
+    LV_LOG_USER("EGL region successfully created (egl_region=%p).", egl_region);
+    return egl_region;
+}
+
+//  Create the EGL Context for rendering OpenGL graphics
+static void init_egl(lv_disp_t * disp) {
+	LV_LOG_USER("Init EGL for display %p ...", disp);
+
+    //  Attributes for our EGL Display
+    EGLint config_attribs[] = {
+        EGL_SURFACE_TYPE,    EGL_WINDOW_BIT,
+        EGL_RED_SIZE,        8,
+        EGL_GREEN_SIZE,      8,
+        EGL_BLUE_SIZE,       8,
+        EGL_RENDERABLE_TYPE, EGL_OPENGL_ES2_BIT,
+        EGL_NONE
+    };
+    static const EGLint context_attribs[] = {
+        EGL_CONTEXT_CLIENT_VERSION, 2,
+        EGL_NONE
+    };
+
+    //  Get the EGL Display
+    egl_display = eglGetDisplay((EGLNativeDisplayType) disp);
+    LV_ASSERT_MSG((egl_display != EGL_NO_DISPLAY), "Failed to get EGL Display");
+
+    //  Init the EGL Display
+    EGLint major, minor;
+    EGLBoolean egl_init = eglInitialize(egl_display, &major, &minor);
+    LV_ASSERT_MSG(egl_init, "Failed to init EGL Display");
+    LV_LOG_USER("EGL major: %d, minor %d", major, minor);
+
+    //  Get the EGL Configurations
+    EGLint count, n;
+    eglGetConfigs(egl_display, NULL, 0, &count);
+    LV_LOG_USER("EGL has %d configs", count);
+    EGLConfig *configs = calloc(count, sizeof *configs);
+    eglChooseConfig(egl_display, config_attribs,
+        configs, count, &n);
+
+    //  Choose the first EGL Configuration
+    for (int i = 0; i < n; i++) {
+        EGLint size;
+        eglGetConfigAttrib(egl_display, configs[i], EGL_BUFFER_SIZE, &size);
+        LV_LOG_USER("Buffer size for config %d is %d", i, size);
+        eglGetConfigAttrib(egl_display, configs[i], EGL_RED_SIZE, &size);
+        LV_LOG_USER("Red size for config %d is %d", i, size);
+        egl_conf = configs[i];
+        break;
+    }
+    LV_ASSERT_MSG((egl_conf != NULL), "Failed to get EGL Configuration");
+
+    //  Create the EGL Context based on the EGL Display and Configuration
+    egl_context = eglCreateContext(egl_display, egl_conf,
+        EGL_NO_CONTEXT, context_attribs);
+    LV_ASSERT_MSG((egl_context != NULL), "Failed to create EGL Context");
+
+    LV_LOG_USER("EGL Init successfully done (egl_display=%p).", egl_display);
+}
+
+//  Create the EGL Window and render OpenGL graphics
+static struct wl_egl_window *create_egl_window(lv_disp_t * disp) {
+    struct window *window = disp->driver->user_data;
+    if (!window)
+    {
+    	LV_LOG_ERROR("failed to create EGL window, invalid wayland window");
+        return NULL;
+    }
+
+	LV_LOG_USER("Creating EGL window for display %p (%dx%d)...", disp, window->lv_disp_drv.hor_res, window->lv_disp_drv.ver_res);
+	if(create_opaque_region(window) == NULL)
+    {
+        LV_LOG_ERROR("failed to create opaque region for egl window");
+        return NULL;
+    }
+
+#if LV_WAYLAND_XDG_SHELL
+    struct xdg_surface *surface = window->xdg_surface;
+#endif
+#if LV_WAYLAND_WL_SHELL
+    struct wl_shell_surface *surface = window->wl_shell_surface;
+#endif
+
+    //  Create an EGL Window from a Wayland Surface
+    egl_window = wl_egl_window_create(surface, window->lv_disp_drv.hor_res, window->lv_disp_drv.ver_res);
+    LV_ASSERT_MSG((egl_window != EGL_NO_SURFACE), "Failed to create OpenGL Window");
+
+    //  Create an OpenGL Window Surface for rendering
+    egl_surface = eglCreateWindowSurface(egl_display, egl_conf,
+        egl_window, NULL);
+    LV_ASSERT_MSG((egl_surface != NULL), "Failed to create OpenGL Window Surface");
+
+    //  Set the current rendering surface
+    EGLBoolean madeCurrent = eglMakeCurrent(egl_display, egl_surface,
+        egl_surface, egl_context);
+    LV_ASSERT_MSG(madeCurrent, "Failed to set rendering surface");
+
+    //  Swap the display buffers to make the display visible
+    //EGLBoolean swappedBuffers = eglSwapBuffers(egl_display, egl_surface);
+    //LV_ASSERT_MSG(swappedBuffers, "Failed to swap display buffers");
+
+	LV_LOG_USER("EGL window successfully created (window=%p, surface=%p).", egl_window, egl_surface);
+	disp->driver->user_data = egl_window;
+    return egl_window;
+}
+
+extern int Init(ESContext *esContext);
+extern void Draw(ESContext *esContext);
+/// Render the OpenGL ES2 display
+void lv_wayland_egl_render_display(lv_disp_t * disp) {
+    struct window *window = disp->driver->user_data;
+    if (!window || window->closed)
+    {
+        return;
+    }
+
+    //  Create the texture context
+    static ESContext esContext;
+    esInitContext ( &esContext );
+    esContext.width = 320;
+    esContext.height = 240;
+#if 0
+    //   Draw the texture
+    if (Init(&esContext))
+    {
+    	Draw(&esContext);
+
+    	//  Render now
+    	glFlush();
+
+    	//  Swap the display buffers to make the display visible
+    	EGLBoolean swappedBuffers = eglSwapBuffers(egl_display, egl_surface);
+    	LV_ASSERT_MSG(swappedBuffers, "Failed to swap display buffers");
+    }
+#else
+    if (Init(&esContext))
+    {
+        esRegisterDrawFunc(&esContext, Draw);
+
+        esMainLoop(&esContext);
+
+        ShutDown(&esContext);
+    }
+#endif
+}
+#endif
+
 #endif // USE_WAYLAND
