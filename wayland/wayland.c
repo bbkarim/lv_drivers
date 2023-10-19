@@ -1187,7 +1187,7 @@ static void xdg_toplevel_handle_configure(void *data, struct xdg_toplevel *xdg_t
     struct window *window = (struct window *)data;
 
 #if LV_WAYLAND_CLIENT_SIDE_DECORATIONS
-    if (!window->application->opt_disable_decorations && !window->fullscreen)
+    if (!window->application->opt_disable_decorations /* && !window->fullscreen */)
     {
         width -= (2 * BORDER_SIZE);
         height -= (TITLE_BAR_HEIGHT + (2 * BORDER_SIZE));
@@ -1891,7 +1891,7 @@ static bool resize_window(struct window *window, int width, int height)
 
 
 #if LV_WAYLAND_CLIENT_SIDE_DECORATIONS
-    if (!window->application->opt_disable_decorations && !window->fullscreen)
+    if (!window->application->opt_disable_decorations /* && !window->fullscreen */)
     {
         for (b = 0; b < NUM_DECORATIONS; b++)
         {
@@ -1993,6 +1993,14 @@ static struct window *create_window(struct application *app, int width, int heig
         xdg_toplevel_add_listener(window->xdg_toplevel, &xdg_toplevel_listener, window);
         xdg_toplevel_set_title(window->xdg_toplevel, title);
         xdg_toplevel_set_app_id(window->xdg_toplevel, title);
+
+        // Set windows in fullscreen mode by default
+        //xdg_toplevel_set_fullscreen(window->xdg_toplevel, NULL);
+        //window->fullscreen = true;
+
+        xdg_toplevel_set_max_size(window->xdg_toplevel, WAYLAND_HOR_RES, WAYLAND_VER_RES + (LV_WAYLAND_TITLE_BAR_HEIGHT - (2 * LV_WAYLAND_BORDER_SIZE)));
+        xdg_toplevel_set_maximized(window->xdg_toplevel);
+        window->maximized = true;
 
         // XDG surfaces need to be configured before a buffer can be attached.
         // An (XDG) surface commit (without an attached buffer) triggers this
