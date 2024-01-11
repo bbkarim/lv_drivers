@@ -2240,12 +2240,14 @@ void lv_wayland_init(void)
 
     _lv_ll_init(&application.window_ll, sizeof(struct window));
 
+#ifndef LV_WAYLAND_TIMER_HANDLER
     application.cycle_timer = lv_timer_create(_lv_wayland_cycle, LV_WAYLAND_CYCLE_PERIOD, NULL);
     LV_ASSERT_MSG(application.cycle_timer, "failed to create cycle timer");
     if (!application.cycle_timer)
     {
         return;
     }
+#endif
 }
 
 /**
