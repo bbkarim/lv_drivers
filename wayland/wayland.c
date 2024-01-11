@@ -228,6 +228,7 @@ struct window
 #if LV_WAYLAND_XDG_SHELL
     struct xdg_surface *xdg_surface;
     struct xdg_toplevel *xdg_toplevel;
+    uint32_t wm_capabilities;
 #endif
 
     struct buffer_allocator allocator;
@@ -1152,10 +1153,23 @@ static void xdg_toplevel_handle_configure_bounds(void *data, struct xdg_toplevel
      */
 }
 
+static void xdg_toplevel_handle_wm_capabilities(void *data, struct xdg_toplevel *xdg_toplevel,
+                                                struct wl_array *capabilities)
+{
+    uint32_t *cap;
+    struct window *window = (struct window *)data;
+
+    wl_array_for_each(cap, capabilities) {
+        window->wm_capabilities |= (1 << (*cap));
+        /* TODO: Disable appropriate graphics/capabilities as appropriate */
+    }
+}
+
 static const struct xdg_toplevel_listener xdg_toplevel_listener = {
     .configure = xdg_toplevel_handle_configure,
     .close = xdg_toplevel_handle_close,
-    .configure_bounds = xdg_toplevel_handle_configure_bounds
+    .configure_bounds = xdg_toplevel_handle_configure_bounds,
+    .wm_capabilities = xdg_toplevel_handle_wm_capabilities
 };
 
 static void xdg_wm_base_ping(void *data, struct xdg_wm_base *xdg_wm_base, uint32_t serial)
